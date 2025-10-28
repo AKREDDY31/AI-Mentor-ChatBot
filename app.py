@@ -1,73 +1,118 @@
 import os
+from flask import Flask, request, jsonify, render_template
 import google.generativeai as genai
-from flask import Flask, request, jsonify, send_from_directory
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
-# --- System Configuration ---
+app = Flask(__name__, template_folder='.')
 
-# This is the prompt that defines the bot's personality.
-# We keep it on the server, not in the HTML.
-SYSTEM_INSTRUCTION = """You are 'MentorBot,' a supportive and insightful AI partner. Your purpose is to act as a guide, teacher, and mentor for the user's personal and professional growth. 
-Your tone is always calm, empathetic, and encouraging. 
-Focus on helping the user with:
-- Self-development and learning
-- Self-control and discipline
-- Managing mental stress and anxiety
-- Finding life-work balance
-- Career focus and planning
-
-Do not be overly robotic. Be a genuine, curious partner in their wellness journey. Ask thoughtful, open-ended questions to help the user reflect, and provide actionable, practical advice. Keep your responses concise and easy to understand."""
-
-# --- Flask App Setup ---
-app = Flask(__name__)
-
-# --- Gemini API Configuration ---
-api_key = os.getenv("GOOGLE_API_KEY")
-if not api_key:
-    print("Error: GOOGLE_API_KEY not found in .env file.")
-else:
+# Configure the Gemini API
+try:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY not found in environment variables.")
     genai.configure(api_key=api_key)
+    
+    # Set up the model
+    generation_config = {
+      "temperature": 1,
+      "top_p": 0.95,
+      "top_k": 0,
+      "max_output_tokens": 8192,
+    }
 
-# Initialize the Gemini Model
-model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-preview-09-2025',
-    system_instruction=SYSTEM_INSTRUCTION
+    safety_settings = [
+      {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+      },
+    ]
+
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-09-2025",
+                                  generation_config=generation_config,
+                                  safety_settings=safety_settings)
+except Exception as e:
+    print(f"Error configuring Gemini: {e}")
+    model = None
+
+# System instruction for the mentor
+SYSTEM_INSTRUCTION = (
+    "You are an AI Mentor. Your role is to act as a supportive guide, teacher, and partner "
+    "for the user's wellness and personal development. "
+    "You must be empathetic, patient, and encouraging. "
+    "Focus on helping the user with topics like self-development, stress management, "
+    "life balance, and career focus. "
+    "Do not just give generic advice; ask gentle, clarifying questions to understand "
+    "the user's specific situation. "
+    "Your goal is to help the user feel heard, understood, and empowered to make "
+    "positive changes in their life. "
+    "Always respond in Markdown format for good readability."
 )
 
-# --- API Routes ---
-
 @app.route('/')
-def home():
+def index():
     """Serves the main HTML page."""
-    # This will send the 'ai_mentor_chatbot.html' file from the current folder.
-    return send_from_directory('.', 'ai_mentor_chatbot.html')
+    return render_template('ai_mentor_chatbot.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handles the chat message and calls the Gemini API."""
+    """Handles chat messages from the user."""
+    if not model:
+        return jsonify({"error": "Gemini model is not configured. Check API key."}), 500
+
+    data = request.json
+    user_message = data.get('message')
+    conversation_history = data.get('history', [])
+
+    if not user_message:
+        return jsonify({"error": "No message provided."}), 400
+
+    # Format the history for the API
+    api_history = []
+    for item in conversation_history:
+        role = "user" if item['role'] == 'user' else 'model'
+        api_history.append({"role": role, "parts": [{"text": item['text']}]})
+
+    # Add the system instruction at the beginning of the history
+    full_history = [
+        {"role": "user", "parts": [{"text": SYSTEM_INSTRUCTION}]},
+        {"role": "model", "parts": [{"text": "Understood. I am ready to help as a supportive and empathetic mentor."}]}
+    ] + api_history
+
     try:
-        data = request.json
-        history = data.get('history') # Full conversation history from client
-
-        if not history:
-            return jsonify({"error": "No history provided"}), 400
-
-        # Send the entire history to Gemini
-        response = model.generate_content(history)
+        # Start the chat session
+        chat_session = model.start_chat(history=full_history)
         
-        # Return only the new text reply
+        # Send the new message
+        response = chat_session.send_message(user_message)
+        
         return jsonify({"reply": response.text})
 
     except Exception as e:
-        print(f"Error in /chat route: {e}")
-        # Pass a useful error message back to the user
-        return jsonify({"error": f"Server-side error: {str(e)}"}), 500
+        print(f"Error during API call: {e}")
+        return jsonify({"error": f"An error occurred while contacting the Gemini API: {e}"}), 500
 
-# --- Run the App ---
 if __name__ == '__main__':
-    print("Starting Flask server on http://localhost:5000")
-    app.run(debug=True, port=5000)
+    # Get port from environment variable, default to 5000.
+    # Render will set the 'PORT' environment variable.
+    port = int(os.environ.get('PORT', 5000))
+    
+    # Run the app. 
+    # Binding to '0.0.0.0' makes it accessible externally, which Render needs.
+    # We set debug=False because this is a deployment, not development.
+    app.run(debug=False, host='0.0.0.0', port=port)
 
