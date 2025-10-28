@@ -1,394 +1,463 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Mentor Chatbot</title>
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Google Fonts (Inter) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Load an icon library (for new buttons) -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/lib/marked.umd.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
         }
-        /* Custom scrollbar */
-        #chat-history::-webkit-scrollbar,
-        #history-panel-content::-webkit-scrollbar {
-            width: 6px;
+        .chat-container {
+            max-width: 800px;
+            height: 95vh;
+            max-height: 1000px;
         }
-        #chat-history::-webkit-scrollbar-track,
-        #history-panel-content::-webkit-scrollbar-track {
-            background: #f1f5f9;
+        .chat-box {
+            flex-grow: 1;
+            overflow-y: auto;
         }
-        #chat-history::-webkit-scrollbar-thumb,
-        #history-panel-content::-webkit-scrollbar-thumb {
-            background: #94a3b8;
-            border-radius: 3px;
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
         }
-        #chat-history::-webkit-scrollbar-thumb:hover,
-        #history-panel-content::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
+        .ai-message {
+            background-color: #ffffff;
+            color: #1f2937;
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
         }
-        /* For Firefox */
-        #chat-history, #history-panel-content {
-            scrollbar-width: thin;
-            scrollbar-color: #94a3b8 #f1f5f9;
+        .message {
+            max-width: 85%;
+            word-wrap: break-word;
         }
-        
-        /* Added styles for the history panel */
-        #history-panel {
-            transition: transform 0.3s ease-in-out;
+        /* Styling for code blocks in Markdown */
+        .ai-message pre {
+            background-color: #1f2937; /* Dark background for code */
+            color: #f3f4f6; /* Light text for code */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto; /* Allow horizontal scrolling for code */
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .ai-message code {
+            background-color: #e5e7eb; /* Light gray for inline code */
+            color: #be185d; /* Pinkish text for inline code */
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .ai-message pre code {
+            background-color: transparent; /* Reset inline code style inside a pre block */
+            color: inherit;
+            padding: 0;
+        }
+        /* Styling for lists */
+        .ai-message ul, .ai-message ol {
+            padding-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .ai-message ul {
+            list-style-type: disc;
+        }
+        .ai-message ol {
+            list-style-type: decimal;
+        }
+        .loading-dots div {
+            width: 8px;
+            height: 8px;
+            background-color: #9ca3af;
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .loading-dots .dot1 { animation-delay: -0.32s; }
+        .loading-dots .dot2 { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+        #chat-input:focus {
+            box-shadow: 0 0 0 2px #3b82f6;
+            border-color: #3b82f6;
+        }
+        .sidebar {
+            width: 260px;
+            transition: transform 0.3s ease;
+        }
+        .sidebar-closed {
+            transform: translateX(-100%);
+        }
+        .sidebar-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10;
         }
     </style>
 </head>
-<body class="bg-gray-100 h-full flex items-center justify-center p-4">
-    <div class="flex flex-col w-full max-w-2xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden relative">
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="relative flex flex-col w-full chat-container bg-white rounded-2xl shadow-2xl overflow-hidden">
         
-        <!-- Header -->
-        <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 shadow-md z-10">
-            <div class="flex items-center justify-between">
-                <!-- Left Side: Title -->
-                <div class="flex items-center space-x-3">
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    <div>
-                        <h1 class="text-xl font-bold">AI Mentor</h1>
-                        <p class="text-sm text-indigo-100">Your partner in growth and wellness</p>
-                    </div>
-                </div>
-                
-                <!-- Right Side: New History/Menu Buttons -->
-                <div class="flex items-center space-x-2">
-                    <button id="new-chat-btn" title="New Chat" class="p-2 rounded-full hover:bg-indigo-500 transition-colors">
-                        <i class="fas fa-plus w-5 h-5"></i>
-                    </button>
-                    <button id="save-chat-btn" title="Save Current Chat" class="p-2 rounded-full hover:bg-indigo-500 transition-colors">
-                        <i class="fas fa-save w-5 h-5"></i>
-                    </button>
-                    <button id="history-btn" title="View History" class="p-2 rounded-full hover:bg-indigo-500 transition-colors">
-                        <i class="fas fa-history w-5 h-5"></i>
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <!-- Chat History -->
-        <main id="chat-history" class="flex-1 p-6 space-y-4 overflow-y-auto bg-gray-50">
-            <!-- Messages will be added here by JS -->
-        </main>
-
-        <!-- "Bot is typing" Indicator -->
-        <div id="typing-indicator" class="p-4 text-sm text-gray-500 hidden">
-            <!-- (indicator content unchanged) -->
-            <div class="flex items-center space-x-2">
-                <div class="flex-shrink-0 w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-semibold">
-                    <span>AI</span>
-                </div>
-                <div class="flex items-center space-x-1">
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s;"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Input Area -->
-        <footer class="border-t border-gray-200 p-4 bg-white z-10">
-            <form id="chat-form" class="flex items-center space-x-3">
-                <input 
-                    type="text" 
-                    id="user-input" 
-                    placeholder="Ask your mentor a question..." 
-                    class="flex-1 p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                <button 
-                    type="submit" 
-                    id="send-button"
-                    class="p-3 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
-                >
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                </button>
-            </form>
-            <div id="save-message" class="text-center text-sm text-green-600 mt-2 h-4"></div>
-        </footer>
-
-        <!-- History Panel (New) -->
-        <div id="history-panel" class="absolute top-0 right-0 h-full w-full sm:w-80 bg-white shadow-2xl border-l border-gray-200 transform translate-x-full z-20 flex flex-col">
-            <div class="flex items-center justify-between p-4 border-b">
-                <h2 class="text-lg font-bold text-gray-800">Chat History</h2>
-                <button id="close-history-btn" class="p-2 rounded-full hover:bg-gray-200">
-                    <i class="fas fa-times w-5 h-5 text-gray-600"></i>
+        <!-- Sidebar for History -->
+        <div id="sidebar-overlay" class="sidebar-overlay absolute inset-0 hidden lg:hidden" onclick="toggleSidebar()"></div>
+        <div id="sidebar" class="sidebar absolute lg:static left-0 top-0 h-full bg-gray-50 border-r border-gray-200 flex flex-col z-20 sidebar-closed lg:transform-none">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-800">Chat History</h2>
+                <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            <div id="history-panel-content" class="flex-1 overflow-y-auto p-2 space-y-2">
-                <!-- History items will be added here by JS -->
+            <div class="flex-grow overflow-y-auto p-2 space-y-2">
+                <button id="new-chat-btn" class="w-full text-left p-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors">
+                    + New Chat
+                </button>
+                <div id="history-list" class="space-y-1">
+                    <!-- History items will be populated here -->
+                </div>
             </div>
-            <div class="p-2 border-t">
-                <button id="clear-history-btn" class="w-full text-sm text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50">
-                    <i class="fas fa-trash-alt mr-1"></i>
+            <div class="p-4 border-t border-gray-200">
+                <button id="clear-history-btn" class="w-full text-left p-3 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors">
                     Clear All History
                 </button>
             </div>
         </div>
 
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-200 flex items-center space-x-3">
+                <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+                <h1 class="text-xl font-semibold text-gray-800">AI Mentor</h1>
+            </div>
+
+            <!-- Chat Messages -->
+            <div id="chat-box" class="chat-box p-6 space-y-4">
+                <!-- Initial AI message -->
+                <div class="message ai-message p-4 rounded-xl shadow-sm">
+                    Hello! I'm here to listen and help you reflect. What's on your mind today? Whether it's about your career, managing stress, or just life in general, feel free to share.
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loading-indicator" class="hidden p-6 pt-0">
+                <div class="message ai-message p-4 rounded-xl shadow-sm">
+                    <div class="loading-dots">
+                        <div class="dot1"></div>
+                        <div class="dot2"></div>
+                        <div class="dot3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Message Box -->
+            <div id="error-box" class="hidden p-6 pt-0">
+                <div class="message bg-red-100 text-red-700 p-4 rounded-xl shadow-sm" id="error-content">
+                    <!-- Error content goes here -->
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-6 border-t border-gray-200">
+                <form id="chat-form" class="flex items-center space-x-3">
+                    <input type="text" id="chat-input" class="flex-1 p-3 border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition" placeholder="Type your message..." autocomplete="off">
+                    <button type="submit" id="send-btn" class="p-3 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition-colors disabled:opacity-50">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- DOM Elements ---
+        const chatBox = document.getElementById('chat-box');
         const chatForm = document.getElementById('chat-form');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
-        const chatHistoryEl = document.getElementById('chat-history'); // Renamed to avoid conflict
-        const typingIndicator = document.getElementById('typing-indicator');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorBox = document.getElementById('error-box');
+        const errorContent = document.getElementById('error-content');
         
-        // --- New History DOM Elements ---
+        // History UI
+        const historyList = document.getElementById('history-list');
         const newChatBtn = document.getElementById('new-chat-btn');
-        const saveChatBtn = document.getElementById('save-chat-btn');
-        const historyBtn = document.getElementById('history-btn');
-        const historyPanel = document.getElementById('history-panel');
-        const closeHistoryBtn = document.getElementById('close-history-btn');
-        const historyPanelContent = document.getElementById('history-panel-content');
         const clearHistoryBtn = document.getElementById('clear-history-btn');
-        const saveMessageEl = document.getElementById('save-message');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-        // --- State ---
+        // Stores all chats: { id: "chat-123", title: "...", messages: [...] }
+        let allChats = {};
+        let currentChatId = null;
+
+        // The conversation history for the *current* chat
+        // Stores messages in the format: { role: "...", parts: [{ text: "..." }] }
         let conversationHistory = [];
-        const initialBotMessage = {
-            role: "model",
-            parts: [{ text: "Hello! I'm here to listen and help you reflect. What's on your mind today? Whether it's about your career, managing stress, or just life in general, feel free to share." }]
-        };
 
-        // --- Event Listeners ---
+        // --- Core Chat Logic ---
+
+        // Function to call the backend API
+        async function callGeminiAPI(message, history) {
+            showLoading(true);
+            hideError();
+            
+            // =================================================================
+            // THIS IS THE CRITICAL FIX
+            // The server expects a JSON object with 'message' and 'history' keys.
+            // =================================================================
+            const payload = {
+                message: message,
+                history: history 
+            };
+            
+            let retries = 0;
+            const maxRetries = 3;
+
+            while (retries < maxRetries) {
+                try {
+                    // FIX: Use window.location.origin to build the full URL
+                    // This resolves issues in sandboxed (blob:) environments
+                    const response = await fetch(window.location.origin + '/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    showLoading(false);
+                    addMessageToChat(data.reply, 'ai');
+                    // Add AI reply to history
+                    conversationHistory.push({ role: "model", parts: [{ text: data.reply }] });
+                    saveCurrentChat(); // Save chat after AI reply
+                    return; // Success
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    retries++;
+                    if (retries >= maxRetries) {
+                        showLoading(false);
+                        showError(`I seem to be having connection issues. (${error.message})`);
+                    } else {
+                        // Exponential backoff: 1s, 2s, 4s
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries - 1) * 1000));
+                    }
+                }
+            }
+        }
+
+        // Handle form submission
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const message = userInput.value.trim();
+            const message = chatInput.value.trim();
             if (message) {
-                // Add user message to UI
-                addMessageToHistory('user', message);
-                
-                // Add user message to conversation history
+                addMessageToChat(message, 'user');
+                // Add user message to history in the correct format
                 conversationHistory.push({ role: "user", parts: [{ text: message }] });
-                
-                // Clear input and disable form
-                userInput.value = '';
-                userInput.disabled = true;
-                sendButton.disabled = true;
-
-                // Show typing indicator
-                typingIndicator.classList.remove('hidden');
-                
-                // Call the AI (our backend)
-                callBackendAPI();
+                chatInput.value = '';
+                callGeminiAPI(message, conversationHistory);
             }
         });
 
-        // --- New History Event Listeners ---
-        newChatBtn.addEventListener('click', () => {
-            // Start a new chat
-            conversationHistory = [initialBotMessage];
-            renderChat();
-            showSaveMessage("New chat started.", "green");
-        });
-
-        saveChatBtn.addEventListener('click', () => {
-            saveCurrentChat();
-        });
-
-        historyBtn.addEventListener('click', () => {
-            populateHistoryPanel();
-            historyPanel.classList.remove('translate-x-full');
-        });
-
-        closeHistoryBtn.addEventListener('click', () => {
-            historyPanel.classList.add('translate-x-full');
-        });
-
-        clearHistoryBtn.addEventListener('click', () => {
-            if (confirm("Are you sure you want to delete ALL chat history? This cannot be undone.")) {
-                localStorage.removeItem('mentorChats');
-                populateHistoryPanel();
-            }
-        });
-
-        // --- UI Functions ---
-        function addMessageToHistory(role, text) {
-            const messageDiv = document.createElement('div');
+        // Add a message to the chat window
+        function addMessageToChat(text, sender) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'p-4', 'rounded-xl', 'shadow-sm');
+            messageElement.classList.add(sender === 'user' ? 'user-message' : 'ai-message');
             
-            if (role === 'user') {
-                messageDiv.className = 'flex justify-end items-start space-x-3';
-                messageDiv.innerHTML = `
-                    <div class="bg-indigo-600 text-white p-4 rounded-xl rounded-tr-none shadow max-w-md">
-                        <p>${text}</p>
-                    </div>
-                    <div class="flex-shrink-0 w-10 h-10 bg-gray-300 text-gray-700 rounded-full flex items-center justify-center font-semibold">
-                        <span>You</span>
-                    </div>
-                `;
-            } else { // 'model'
-                messageDiv.className = 'flex items-start space-x-3';
-                messageDiv.innerHTML = `
-                    <div class="flex-shrink-0 w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center font-semibold">
-                        <span>AI</span>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl rounded-tl-none shadow border border-gray-200 max-w-md">
-                        <p class="text-gray-800">${text}</p>
-                    </div>
-                `;
+            if (sender === 'ai') {
+                // Render Markdown for AI messages
+                messageElement.innerHTML = marked.parse(text);
+            } else {
+                // Plain text for user messages
+                const p = document.createElement('p');
+                p.textContent = text;
+                messageElement.appendChild(p);
             }
             
-            chatHistoryEl.appendChild(messageDiv);
-            
-            // Scroll to the bottom
-            chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        /**
-         * Clears the chat UI and re-draws it from the conversationHistory array
-         */
-        function renderChat() {
-            chatHistoryEl.innerHTML = ''; // Clear the chat
-            conversationHistory.forEach(message => {
-                addMessageToHistory(message.role, message.parts[0].text);
+        // --- UI Helpers (Loading, Error, Sidebar) ---
+
+        function showLoading(isLoading) {
+            loadingIndicator.classList.toggle('hidden', !isLoading);
+            sendBtn.disabled = isLoading;
+            chatInput.disabled = isLoading;
+            if (isLoading) chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showError(message) {
+            errorContent.textContent = message;
+            errorBox.classList.remove('hidden');
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function hideError() {
+            errorBox.classList.add('hidden');
+        }
+        
+        function toggleSidebar() {
+            sidebar.classList.toggle('sidebar-closed');
+            sidebarOverlay.classList.toggle('hidden');
+        }
+
+        // --- History & Persistence Logic ---
+
+        // Load all chats from localStorage on startup
+        function loadAllChats() {
+            const storedChats = localStorage.getItem('aiMentorChats');
+            if (storedChats) {
+                allChats = JSON.parse(storedChats);
+            }
+            const storedChatId = localStorage.getItem('aiMentorCurrentChatId');
+            if (storedChatId && allChats[storedChatId]) {
+                loadChat(storedChatId);
+            } else {
+                startNewChat();
+            }
+            renderHistoryList();
+        }
+
+        // Start a new chat session
+        function startNewChat() {
+            const newChatId = `chat-${Date.now()}`;
+            currentChatId = newChatId;
+            conversationHistory = []; // Clear memory
+            
+            // Clear UI
+            chatBox.innerHTML = '';
+            addMessageToChat("Hello! I'm here to listen and help you reflect. What's on your mind today? Whether it's about your career, managing stress, or just life in general, feel free to share.", 'ai');
+            
+            // Add default AI greeting to history
+            conversationHistory.push({
+                role: "model",
+                parts: [{ text: "Hello! I'm here to listen and help you reflect. What's on your mind today? Whether it's about your career, managing stress, or just life in general, feel free to share." }]
             });
-        }
 
-        /**
-         * Shows a temporary message in the footer (e.g., "Chat saved!")
-         */
-        function showSaveMessage(message, color = "green") {
-            saveMessageEl.textContent = message;
-            saveMessageEl.className = `text-center text-sm text-${color}-600 mt-2 h-4`;
-            setTimeout(() => {
-                saveMessageEl.textContent = '';
-            }, 2000);
-        }
-
-        // --- API Call Function (Unchanged) ---
-        async function callBackendAPI() {
-            const apiUrl = '/chat';
-            const payload = {
-                history: conversationHistory 
+            // Save this new empty chat
+            allChats[currentChatId] = {
+                id: currentChatId,
+                title: 'New Chat',
+                messages: conversationHistory
             };
+            
+            localStorage.setItem('aiMentorCurrentChatId', currentChatId);
+            renderHistoryList(); // Update sidebar
+            saveAllChats();
+            
+            if (window.innerWidth < 1024) { // Close sidebar on mobile
+                toggleSidebar();
+            }
+        }
+        
+        newChatBtn.addEventListener('click', startNewChat);
 
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+        // Load a specific chat from history
+        function loadChat(chatId) {
+            if (!allChats[chatId]) return;
+            
+            currentChatId = chatId;
+            // Ensure loaded history is in the correct format
+            conversationHistory = allChats[chatId].messages.map(item => {
+                if (item.parts) {
+                    return item; // Already new format
+                } else {
+                    // Convert old format
+                    return { role: item.role, parts: [{ text: item.text }] };
                 }
-
-                const result = await response.json();
-                let botResponse = result.reply;
-                
-                conversationHistory.push({ role: "model", parts: [{ text: botResponse }] });
-                addMessageToHistory('model', botResponse);
-
-            } catch (error) {
-                console.error('Error calling backend API:', error);
-                addMessageToHistory('model', `I seem to be having connection issues. (Error: ${error.message})`);
-                
-            } finally {
-                typingIndicator.classList.add('hidden');
-                userInput.disabled = false;
-                sendButton.disabled = false;
-                userInput.focus();
+            });
+            
+            localStorage.setItem('aiMentorCurrentChatId', currentChatId);
+            
+            // Render the loaded chat
+            chatBox.innerHTML = '';
+            conversationHistory.forEach(item => {
+                const sender = item.role === 'model' ? 'ai' : 'user';
+                addMessageToChat(item.parts[0].text, sender);
+            });
+            
+            renderHistoryList(); // Highlight active chat
+            if (window.innerWidth < 1024) { // Close sidebar on mobile
+                toggleSidebar();
             }
         }
 
-        // --- New History Functions ---
-
-        /**
-         * Gets all saved chats from localStorage
-         */
-        function getSavedChats() {
-            return JSON.parse(localStorage.getItem('mentorChats') || '[]');
-        }
-
-        /**
-         * Saves the current chat to localStorage
-         */
+        // Save the *current* chat's state (messages and title)
         function saveCurrentChat() {
-            // Don't save empty or initial chats
-            if (conversationHistory.length <= 1) {
-                showSaveMessage("Nothing to save yet.", "red");
-                return;
-            }
-
-            const allChats = getSavedChats();
+            if (!currentChatId) return;
             
-            // Create a title for the chat (first user message)
-            const firstUserMessage = conversationHistory.find(m => m.role === 'user');
-            let title = "Chat";
-            if (firstUserMessage) {
-                title = firstUserMessage.parts[0].text.substring(0, 30) + "...";
+            // Auto-generate a title from the first user message
+            let title = allChats[currentChatId].title;
+            if (title === 'New Chat' && conversationHistory.length > 1) {
+                const firstUserMsg = conversationHistory.find(m => m.role === 'user');
+                if (firstUserMsg) {
+                    title = firstUserMsg.parts[0].text.substring(0, 30) + '...';
+S                }
             }
             
-            const chatData = {
-                id: new Date().toISOString(),
+            allChats[currentChatId] = {
+                id: currentChatId,
                 title: title,
-                savedAt: new Date().toLocaleString(),
-                history: conversationHistory
+                messages: conversationHistory
             };
-            
-            allChats.unshift(chatData); // Add to the beginning of the list
-            localStorage.setItem('mentorChats', JSON.stringify(allChats));
-            showSaveMessage("Chat saved!", "green");
-            populateHistoryPanel(); // Refresh history panel if open
+            saveAllChats();
+            renderHistoryList(); // Update titles in sidebar
+        }
+        
+        // Save the entire `allChats` object to localStorage
+        function saveAllChats() {
+            localStorage.setItem('aiMentorChats', JSON.stringify(allChats));
         }
 
-        /**
-         * Fills the history panel with saved chats
-         */
-        function populateHistoryPanel() {
-            historyPanelContent.innerHTML = ''; // Clear list
-            const allChats = getSavedChats();
-
-            if (allChats.length === 0) {
-                historyPanelContent.innerHTML = '<p class="text-center text-gray-500 p-4">No saved chats yet.</p>';
-                return;
-            }
-
-            allChats.forEach((chat, index) => {
-                const chatDiv = document.createElement('div');
-                chatDiv.className = 'p-3 hover:bg-gray-100 rounded-lg cursor-pointer border-b';
-                chatDiv.innerHTML = `
-                    <p class="font-medium text-gray-800 truncate">${chat.title}</p>
-                    <p class="text-sm text-gray-500">${chat.savedAt}</p>
-                `;
-                chatDiv.addEventListener('click', () => {
-                    loadChat(index);
-                });
-                historyPanelContent.appendChild(chatDiv);
+        // Re-draw the history list in the sidebar
+        function renderHistoryList() {
+            historyList.innerHTML = ''; // Clear list
+            
+            // Get chats and sort by date (newest first)
+            const sortedChats = Object.values(allChats).sort((a, b) => {
+                const idA = parseInt(a.id.split('-')[1]);
+                const idB = parseInt(b.id.split('-')[1]);
+                return idB - idA;
+            });
+            
+            sortedChats.forEach(chat => {
+                const item = document.createElement('button');
+                item.className = `w-full text-left p-3 rounded-lg truncate ${chat.id === currentChatId ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-100'}`;
+                item.textContent = chat.title;
+                item.setAttribute('data-id', chat.id);
+                item.onclick = () => loadChat(chat.id);
+                historyList.appendChild(item);
             });
         }
-
-        /**
-         * Loads a specific chat from history into the main window
-         */
-        function loadChat(index) {
-            const allChats = getSavedChats();
-            const chatToLoad = allChats[index];
-            
-            if (chatToLoad) {
-                conversationHistory = chatToLoad.history;
-                renderChat();
-                historyPanel.classList.add('translate-x-full'); // Close panel
+        
+        // Clear all history
+        clearHistoryBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear all chat history? This cannot be undone.')) {
+                allChats = {};
+                saveAllChats();
+                localStorage.removeItem('aiMentorCurrentChatId');
+                startNewChat();
             }
-        }
+        });
 
-
-        // --- Initial setup ---
-        // Start a new chat on page load
-        conversationHistory = [initialBotMessage];
-        renderChat();
-
+        // Initial load
+        loadAllChats();
+        
     </script>
 </body>
 </html>
