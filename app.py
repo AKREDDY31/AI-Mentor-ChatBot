@@ -75,6 +75,14 @@ def chat():
         return jsonify({"error": "Gemini model is not configured. Check API key."}), 500
 
     data = request.json
+    
+    # --- START DEBUGGING ---
+    # Log the entire incoming request data to the console
+    print("===================================")
+    print(f"Received data: {data}")
+    print("===================================")
+    # --- END DEBUGGING ---
+
     user_message = data.get('message')
     conversation_history = data.get('history', [])
 
